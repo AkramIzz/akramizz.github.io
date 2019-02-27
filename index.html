@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Required meta tags -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <title>  Akram Izzeldin | 
+</title>
+  <link rel="canonical" href="/index.html">
+
+
+  <link rel="stylesheet" href="/theme/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/theme/css/font-awesome.min.css">
+  <link rel="stylesheet" href="/theme/css/pygments/default.min.css">
+  <link rel="stylesheet" href="/theme/css/theme.css">
+
+  
+
+
+</head>
+
+<body>
+  <header class="header">
+    <div class="container">
+<div class="row">
+  <div class="col-sm-12">
+    <h1 class="title"><a href="/">Akram Izzeldin</a></h1>
+      <ul class="list-inline">
+          <li class="list-inline-item"><a href="https://github.com/akramizz" target="_blank">github</a></li>
+              <li class="list-inline-item text-muted">|</li>
+            <li class="list-inline-item"><a href="/pages/resume.html">Resume</a></li>
+      </ul>
+  </div>
+</div>    </div>
+  </header>
+
+  <div class="main">
+    <div class="container">
+      <h1>  Articles
+</h1>
+      <hr>
+  <article class="article">
+    <h1><a href="/database-design-and-implementation.html">Database Design and Implementation</a></h1>
+    <header>
+      <ul class="list-inline">
+        <li class="list-inline-item text-muted" title="2019-02-27T00:00:00+02:00">
+          <i class="fa fa-clock-o"></i>
+          Wed 27 February 2019
+        </li>
+      </ul>
+    </header>
+    <div class="content">
+      <p>In the past few weeks, I have been experimenting with my own NoSQL database, a key-value data store to be precise. And I have realized how simple it's to create, at least a non-distributed one. Ok, ok, you may argue that this is the distinguishing characteristic of a NoSQL database, but I have learned so much from this simple and fun project, and to honest it's so amazing that I couldn't resist writing a post about it, so here we go.</p>
+<p><strong>Disclaimer</strong>: I'm in no way a databases expert. The thoughts in this post are my own understanding of NoSQL databases, how they may operate and their concepts after searching and reading about the topic from various sources.
+If you notice any bugs, misconceptions or mistakes, please leave a comment or contact me.</p>
+<p>What we are going to build is a key-value database that (mostly) adheres to the A<strike>C</strike>ID properties. If you don't know what are these properties, stick around we will shortly know. The database is persistent in a file. It will support putting a value, updating a value, getting the value, or deleting it. Enough talk let's get going.</p>
+<h2>An Immutable Binary-Search Tree</h2>
+<p>When solving a problem, specially a big problem, I like to start with a simpler version of the problem, so first, we will begin with an in-memory key-value store. Yes, it's a simple dictionary but we won't use a hash table because a hash table isn't easy to store and be partly load into memory from a file. What we will use is a binary-search tree. A binary-search tree can be divided into standalone nodes, which is nice to have. We will soon see why. I'm going to use an immutable implementation of the binary-search tree data structure, it will help us later when we need to store the database, and you will see how easy it's to implement</p>
+<p>An immutable binary-search tree means that each time we modify a node we create a copy of the current tree with the modified node. But since the trees are immutable, we can reuse some parts of the previous tree without fear of it being modified, and only copy the part of the tree that connects from tree's root to the modified node. For example if we have a tree that look like this</p>
+<p><img alt="Binary Tree Before Insertion" src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Purely_functional_tree_before.svg/348px-Purely_functional_tree_before.svg.png"></p>
+<p>then if we insert node <code>e</code> into the tree by creating a copy, we only need to copy four nodes.</p>
+<p><img alt="Binary Tree After Insertion" src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Purely_functional_tree_after.svg/438px-Purely_functional_tree_after.svg.png"></p>
+<p>becuase the rest of the tree wasn't modified we don't need to copy it nor do we worry about the previous tree modifying its nodes, because it's immutable.</p>
+<p>Let's write the node class, and the binary tree constructor</p>
+<div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Node</span><span class="p">:</span>
+   <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">key</span> <span class="o">=</span> <span class="n">key</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">value</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">left</span> <span class="o">=</span> <span class="n">left</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">right</span> <span class="o">=</span> <span class="n">right</span>
+
+<span class="k">class</span> <span class="nc">BinaryTree</span><span class="p">:</span>
+   <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_root</span> <span class="o">=</span> <span class="bp">None</span>
+</pre></div>
+
+
+<p>next we will define the get operation in the binary tree class</p>
+<div class="highlight"><pre><span></span>   <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+      <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_root</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">_get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+      <span class="k">if</span> <span class="n">node</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="k">return</span> <span class="bp">None</span> <span class="c1"># Not found</span>
+      <span class="k">elif</span> <span class="n">key</span> <span class="o">==</span> <span class="n">node</span><span class="o">.</span><span class="n">key</span><span class="p">:</span>
+         <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span>
+      <span class="k">elif</span> <span class="n">key</span> <span class="o">&gt;</span> <span class="n">node</span><span class="o">.</span><span class="n">key</span><span class="p">:</span>
+         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+</pre></div>
+
+
+<p>and the set operation</p>
+<div class="highlight"><pre><span></span>   <span class="k">def</span> <span class="nf">set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_root</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_root</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">_set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+      <span class="k">if</span> <span class="n">node</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="k">return</span> <span class="n">Node</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="bp">None</span><span class="p">,</span> <span class="bp">None</span><span class="p">)</span>
+      <span class="k">elif</span> <span class="n">key</span> <span class="o">==</span> <span class="n">node</span><span class="o">.</span><span class="n">key</span><span class="p">:</span>
+         <span class="k">return</span> <span class="n">Node</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">)</span>
+      <span class="k">elif</span> <span class="n">key</span> <span class="o">&gt;</span> <span class="n">node</span><span class="o">.</span><span class="n">key</span><span class="p">:</span>
+         <span class="k">return</span> <span class="n">Node</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">key</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_set</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">))</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="k">return</span> <span class="n">Node</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">key</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_set</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">),</span> <span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">)</span>
+</pre></div>
+
+
+<p>finally the delete operation</p>
+<div class="highlight"><pre><span></span>   <span class="k">def</span> <span class="nf">delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_root</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_delete</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_root</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">_delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+      <span class="k">if</span> <span class="n">node</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s2">&quot;Key not found&quot;</span><span class="p">)</span>
+      <span class="k">elif</span> <span class="n">key</span> <span class="o">==</span> <span class="n">node</span><span class="o">.</span><span class="n">key</span><span class="p">:</span>
+         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">left</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">or</span> <span class="n">node</span><span class="o">.</span><span class="n">right</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">)</span>
+         <span class="k">else</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">None</span>
+      <span class="k">elif</span> <span class="n">key</span> <span class="o">&gt;</span> <span class="n">node</span><span class="o">.</span><span class="n">key</span><span class="p">:</span>
+         <span class="k">return</span> <span class="n">Node</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">key</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_delete</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">,</span> <span class="n">key</span><span class="p">))</span>
+      <span class="k">else</span><span class="p">:</span>
+         <span class="k">return</span> <span class="n">Node</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">key</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_delete</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="n">key</span><span class="p">),</span> <span class="n">node</span><span class="o">.</span><span class="n">right</span><span class="p">)</span>
+</pre></div>
+
+
+<p>to delete a node, we need to merge it's left and right nodes. First we determine the highest key in the left subtree, then we move it to the place of the node we wish to delete. This we it's guaranteed that this replacement node will be larger than the left node and smaller than the right node.</p>
+<p>if only a left or right node exists, it simply becomes the replacement for the deleted node.</p>
+<p>if neither left or right node exists, we just delete the node.</p>
+<div class="highlight"><pre><span></span>   <span class="k">def</span> <span class="nf">merge</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">):</span>
+      <span class="n">new_node</span> <span class="o">=</span> <span class="bp">None</span>
+      <span class="k">if</span> <span class="n">left</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="n">right_ref</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="n">left_max</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_max</span><span class="p">(</span><span class="n">left</span><span class="p">)</span>
+         <span class="n">new_left</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_delete</span><span class="p">(</span><span class="n">left</span><span class="p">,</span> <span class="n">left_max</span><span class="o">.</span><span class="n">key</span><span class="p">)</span>
+         <span class="n">new_node</span> <span class="o">=</span> <span class="n">Node</span><span class="p">(</span><span class="n">left_max</span><span class="o">.</span><span class="n">key</span><span class="p">,</span> <span class="n">left_max</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+            <span class="n">new_left</span><span class="p">,</span> <span class="n">right</span><span class="p">)</span>
+      <span class="k">elif</span> <span class="n">left_ref</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="n">new_node</span> <span class="o">=</span> <span class="n">Node</span><span class="p">(</span><span class="n">left</span><span class="o">.</span><span class="n">key</span><span class="p">,</span> <span class="n">left</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+            <span class="n">left</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="n">left</span><span class="o">.</span><span class="n">right</span><span class="p">)</span>
+      <span class="k">elif</span> <span class="n">right_ref</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="n">new_node</span> <span class="o">=</span> <span class="n">Node</span><span class="p">(</span><span class="n">right</span><span class="o">.</span><span class="n">key</span><span class="p">,</span> <span class="n">right</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+            <span class="n">right</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="o">.</span><span class="n">right</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">new_node</span>
+
+   <span class="k">def</span> <span class="nf">_get_max</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">):</span>
+      <span class="k">while</span> <span class="n">node</span><span class="o">.</span><span class="n">right</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="n">node</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">right</span>
+      <span class="k">return</span> <span class="n">node</span>
+</pre></div>
+
+
+<p>With this in place we can start implementing the A<strike>C</strike>ID properties. We won't go in order but we will cover them all</p>
+<h2>Durability</h2>
+<p>Durability is the property that a committed database transaction (a set of related modification to the database that should be treated as a indivisible bundle) is never lost, even if a failure happens <em>after</em> committing or the application was closed.</p>
+<p>To achieve this, we need to store our current database (the binary-search tree) in a file and guarantee that a committed transaction is completely written in the database file such that even if the computer shut down unexpectedly we won't lose our database.</p>
+<p>Next, we need to specify how the binary-search tree is stored in the file. Some of the properties we need are:</p>
+<ul>
+<li>being able to store parts of the tree. Since a modification to the tree only copies a small portion of the unmodified tree, storing the whole tree on each commit would be a waste of space and time.</li>
+<li>being able to load parts of the tree. Loading the whole database at once in memory is both time and space consuming. And if big values are stored in the tree they also need to be loaded even if they aren't used. So we need to be able to load a few nodes only</li>
+<li>being able to locate the root in the database. The root is the fundamental block of the tree, without it we can't even dream of knowing what, or where are the rest of the tree. If we deleted the tree we lose everything including the root, and we won't be able to load the tree from the file because we don't know where the root is in the file</li>
+</ul>
+<p>To store parts of a tree, that means each part of a tree can be stored in a different location in the file. If you have used C or similar languages, a node class implementation would use pointers to locate the left and right nodes. A pointer is simply a location in memory. We will use the same trick here, each stored value will get an address (the pointer) that can be used to reference the value in the file. That means we will use our file storage like a memory with addresses.</p>
+<p>If a node knows the address of it's left and right nodes it can load them into memory easily but it also means that to store a node all the nodes it references directly or indirectly needs to be stored first. This is not a problem, but something to keep in mind.</p>
+<p>This also solves the problem of loading parts of the tree, though partially. What happens when we load a node that it's left or right node is not loaded? We said that when storing a node we only store it's left and right nodes using a pointer in C.</p>
+<p>We will do something similar. We don't need to load the full tree to be able to access it. We will represent a node in two ways, either the current representation, we will call it it's value (very imaginative) which has the normal fields of a node (key, value, left, right), or using an int which is a pointer to the node in the database file. This way we don't need to load the full tree, because a node can be represented by a number.</p>
+<p>We will use this value-address pair to represent a value too. Even if we loaded a node we don't need it's value most of the time. So we won't load the value until it's needed.</p>
+<p>Lastly, we need to be able to locate the root in the database. This is simple, we use a pointer stored at the beginning of the file that points to the location of the root, that way when we need to get the root, we read the pointer at the beginning of the file, then we seek to where that pointer leads us in the file, lastly we read the root node.</p>
+<p>To implement this we will use the struct package provided by python standard library. We will use it to convert a python int to a fixed size int (8 bytes) or vice-versa.</p>
+<p>We will start with some helpers</p>
+<div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Storage</span><span class="p">:</span>
+   <span class="c1"># &gt; means big-endian order (network order), std. size and alignment</span>
+   <span class="c1"># Q means Unsigned long long</span>
+   <span class="n">INTEGER_FORMAT</span> <span class="o">=</span> <span class="s2">&quot;&gt;Q&quot;</span>
+   <span class="c1"># the standard size of unsigned long long</span>
+   <span class="n">INTEGER_SIZE</span> <span class="o">=</span> <span class="mi">8</span>
+   <span class="c1"># root address is stored at the beginning of the file</span>
+   <span class="c1"># the root block is 8 bytes in size</span>
+   <span class="n">ROOT_BLOCK_SIZE</span> <span class="o">=</span> <span class="mi">8</span>
+
+   <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">file</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_file</span> <span class="o">=</span> <span class="nb">file</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_ensure_root_block</span><span class="p">()</span>
+
+   <span class="k">def</span> <span class="nf">_ensure_root_block</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_file</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">SEEK_END</span><span class="p">)</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_file</span><span class="o">.</span><span class="n">tell</span><span class="p">()</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ROOT_BLOCK_SIZE</span><span class="p">:</span>
+         <span class="c1"># root block exists. No further actions needed</span>
+         <span class="k">return</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_file</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">b</span><span class="s1">&#39;</span><span class="se">\x00</span><span class="s1">&#39;</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">ROOT_BLOCK_SIZE</span><span class="p">)</span> <span class="c1"># writes 0</span>
+
+   <span class="k">def</span> <span class="nf">_write_int</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">integer</span><span class="p">):</span>
+      <span class="nb">bytes</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">pack</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">INTEGER_FORMAT</span><span class="p">,</span> <span class="n">integer</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="nb">bytes</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">_read_int</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="nb">bytes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_file</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">INTEGER_SIZE</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">struct</span><span class="o">.</span><span class="n">unpack</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">INTEGER_FORMAT</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+</pre></div>
+
+
+<p>Data is always written at the end of the file, but honestly it doesn't matter, all that matters is we write the data in a place that is not used, and the end of the file seemed like a good solution.</p>
+<p>Right before storing the data we write it's size so that when reading we know how many bytes we should read, this is known as a fat-pointer ??!.</p>
+<div class="highlight"><pre><span></span>   <span class="k">def</span> <span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_file</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">SEEK_END</span><span class="p">)</span>
+      <span class="n">address</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_file</span><span class="o">.</span><span class="n">tell</span><span class="p">()</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_write_int</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">))</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">address</span>
+</pre></div>
+
+
+<p>given an address we can read the data</p>
+<div class="highlight"><pre><span></span>   <span class="k">def</span> <span class="nf">read</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">address</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_file</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="n">address</span><span class="p">)</span>
+      <span class="n">length</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_int</span><span class="p">()</span>
+      <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_file</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">length</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">data</span>
+</pre></div>
+
+
+<p>lastly some methods to write and read the root address</p>
+<div class="highlight"><pre><span></span>   <span class="k">def</span> <span class="nf">write_root_address</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">address</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_file</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_write_int</span><span class="p">(</span><span class="n">address</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">read_root_address</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_file</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+      <span class="n">address</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_int</span><span class="p">()</span>
+
+      <span class="k">if</span> <span class="n">address</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+         <span class="k">return</span> <span class="bp">None</span>
+      <span class="k">return</span> <span class="n">address</span>
+</pre></div>
+
+
+<p>As we said previously, we will use two representation of the values stored in the database (whether it be a node's value or the node itself). Thus we write a class for it.</p>
+<p>We will need to be able to serialize (convert to bytes) the value and load/de-serialize the read bytes when writing and reading from the Storage class. For this we will use the pickle package provided by the python standard library</p>
+<div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">ValueRef</span><span class="p">:</span>
+   <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">address</span><span class="o">=</span><span class="bp">None</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">address</span> <span class="o">=</span> <span class="n">value</span><span class="p">,</span> <span class="n">address</span>
+
+   <span class="k">def</span> <span class="nf">serialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="n">pickle</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="nb">bytes</span><span class="p">)</span>
+</pre></div>
+
+
+<p>and the node and it's ValueRef class becomes</p>
+<div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Node</span><span class="p">:</span>
+   <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value_ref</span><span class="p">,</span> <span class="n">left_ref</span><span class="p">,</span> <span class="n">right_ref</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">key</span> <span class="o">=</span> <span class="n">key</span>
+      <span class="o">...</span>
+
+<span class="k">class</span> <span class="nc">NodeRef</span><span class="p">(</span><span class="n">ValueRef</span><span class="p">):</span>
+   <span class="k">def</span> <span class="nf">serialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">return</span> <span class="n">pickle</span><span class="o">.</span><span class="n">dumps</span><span class="p">((</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">key</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">value_ref</span><span class="o">.</span><span class="n">address</span><span class="p">,</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">left_ref</span><span class="o">.</span><span class="n">address</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">left_ref</span> <span class="k">else</span> <span class="bp">None</span><span class="p">,</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">right_ref</span><span class="o">.</span><span class="n">address</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">right_ref</span> <span class="k">else</span> <span class="bp">None</span>
+      <span class="p">))</span>
+
+   <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">):</span>
+      <span class="n">key</span><span class="p">,</span> <span class="n">value_addr</span><span class="p">,</span> <span class="n">left_addr</span><span class="p">,</span> <span class="n">right_addr</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="nb">bytes</span><span class="p">)</span>
+
+      <span class="n">left_ref</span> <span class="o">=</span> <span class="n">NodeRef</span><span class="p">(</span><span class="n">address</span><span class="o">=</span><span class="n">left_addr</span><span class="p">)</span> <span class="k">if</span> <span class="n">left_addr</span> <span class="k">else</span> <span class="bp">None</span> 
+      <span class="n">right_ref</span> <span class="o">=</span> <span class="n">NodeRef</span><span class="p">(</span><span class="n">address</span><span class="o">=</span><span class="n">right_addr</span><span class="p">)</span> <span class="k">if</span> <span class="n">right_addr</span> <span class="k">else</span> <span class="bp">None</span>
+
+      <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">Node</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">ValueRef</span><span class="p">(</span><span class="n">address</span><span class="o">=</span><span class="n">value_addr</span><span class="p">),</span> <span class="n">left_ref</span><span class="p">,</span> <span class="n">right_ref</span><span class="p">)</span>
+</pre></div>
+
+
+<p>Now all that's left is to use this in the tree class. I want to maintain a good decoupling, so we will use an abstract class that is responsible of linking the tree with the storage, and the tree class will inherent it. We want to separate the in memory representation of the database from the storage representation and to decouple them greatly, that way even if we decided to use a different implementation of the in memory representation, we don't modify the code much.</p>
+<div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">LogicalBase</span><span class="p">:</span>
+   <span class="n">RootRefClass</span> <span class="o">=</span> <span class="bp">None</span> <span class="c1"># implemented in BinaryTree class</span>
+   <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">storage</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_storage</span> <span class="o">=</span> <span class="n">storage</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span> <span class="o">=</span> <span class="bp">None</span>
+
+   <span class="k">def</span> <span class="nf">_retrieve_root</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="n">address</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_storage</span><span class="o">.</span><span class="n">read_root_address</span><span class="p">()</span>
+      <span class="k">if</span> <span class="n">address</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span> <span class="o">=</span> <span class="bp">None</span>
+         <span class="k">return</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span><span class="o">.</span><span class="n">address</span> <span class="o">==</span> <span class="n">address</span><span class="p">:</span>
+         <span class="k">return</span>
+
+      <span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">RootRefClass</span><span class="p">(</span><span class="n">address</span><span class="o">=</span><span class="n">address</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_storage</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">address</span><span class="p">))</span>
+
+   <span class="k">def</span> <span class="nf">_retrieve</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value_ref</span><span class="p">):</span>
+      <span class="k">if</span> <span class="n">value_ref</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">or</span> <span class="n">value_ref</span><span class="o">.</span><span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="c1"># value is already loaded in memory</span>
+         <span class="k">return</span> <span class="n">value_ref</span>
+      <span class="nb">bytes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_storage</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">value_ref</span><span class="o">.</span><span class="n">address</span><span class="p">)</span>
+      <span class="n">value_ref</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="nb">bytes</span><span class="p">)</span>
+      <span class="k">return</span> <span class="n">value_ref</span>
+
+   <span class="k">def</span> <span class="nf">_store_value_ref</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value_ref</span><span class="p">):</span>
+      <span class="k">if</span> <span class="n">value_ref</span><span class="o">.</span><span class="n">address</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="c1"># value is already stored in memory</span>
+         <span class="k">return</span>
+
+      <span class="n">address</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_storage</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">value_ref</span><span class="o">.</span><span class="n">serialize</span><span class="p">())</span>
+      <span class="n">value_ref</span><span class="o">.</span><span class="n">address</span> <span class="o">=</span> <span class="n">address</span>
+</pre></div>
+
+
+<p>with this in place let's continue with the integration of the binary tree class and logical base.</p>
+<p>logical base will define five basic operations, getting a value, setting a value, deleting a value, and committing the changes, or rolling them back. The way these operations will be carried out is the responsibility of the binary tree class.</p>
+<div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">LogicalBase</span><span class="p">:</span>
+   <span class="o">...</span>
+   <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">_retrieve_root</span><span class="p">()</span>
+      <span class="n">value_ref</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_retrieve</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span><span class="p">,</span> <span class="n">key</span><span class="p">))</span>
+      <span class="k">if</span> <span class="n">value_ref</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="k">return</span> <span class="bp">None</span>
+      <span class="k">return</span> <span class="n">value_ref</span><span class="o">.</span><span class="n">value</span>
+
+   <span class="k">def</span> <span class="nf">set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">_retrieve_root</span><span class="p">()</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">ValueRef</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">))</span>
+
+   <span class="k">def</span> <span class="nf">delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">_retrieve_root</span><span class="p">()</span>
+      <span class="k">try</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_delete</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+      <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+         <span class="k">return</span> <span class="bp">False</span>
+      <span class="k">return</span> <span class="bp">True</span>
+
+   <span class="k">def</span> <span class="nf">commit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span><span class="o">.</span><span class="n">address</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">_prepare_to_store</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span><span class="p">)</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">_storage</span><span class="o">.</span><span class="n">write_root_address</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span><span class="o">.</span><span class="n">address</span><span class="p">)</span>      
+      <span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span> <span class="o">=</span> <span class="bp">None</span>
+
+   <span class="k">def</span> <span class="nf">rollback</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_root_ref</span> <span class="o">=</span> <span class="bp">None</span>
+</pre></div>
+
+
+<p>Next to the BinaryTree class</p>
+<div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">BinaryTree</span><span class="p">(</span><span class="n">LogicalBase</span><span class="p">):</span>
+   <span class="n">RootRefClass</span> <span class="o">=</span> <span class="n">NodeRef</span>
+
+   <span class="k">def</span> <span class="nf">_prepare_to_store</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node_ref</span><span class="p">):</span>
+      <span class="k">if</span> <span class="n">node_ref</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">or</span> <span class="n">node_ref</span><span class="o">.</span><span class="n">address</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+         <span class="k">return</span>
+
+      <span class="bp">self</span><span class="o">.</span><span class="n">_prepare_to_store</span><span class="p">(</span><span class="n">node_ref</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">left_ref</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_prepare_to_store</span><span class="p">(</span><span class="n">node_ref</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">right_ref</span><span class="p">)</span>
+
+      <span class="bp">self</span><span class="o">.</span><span class="n">_store_value_ref</span><span class="p">(</span><span class="n">node_ref</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">value_ref</span><span class="p">)</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_store_value_ref</span><span class="p">(</span><span class="n">node_ref</span><span class="p">)</span> 
+</pre></div>
+
+
+<p>for the rest we only need to change a two things.</p>
+<p>First, when returning from a <code>_get</code>, <code>_set</code> or <code>_delete</code> we return a NodeRef with it's value set to the node we were returning in the previous implementation.</p>
+<p>Secondly, when calling these functions we retrieve the value of the <code>node_ref</code> using the <code>_retrieve</code> method we defined earlier.</p>
+<p>And that's it! Our database is durable now, and we can store values without fear of loss.</p>
+<h2>Isolation</h2>
+<p>As our database stands now, it can be everywhere at the same time.</p>
+<p>Suppose that two processes are using the same database. Process A modifies the database at the same time process B modifies it, if you think about it the last process to commit it's changes completely overrides the other process's changes. Because once a transaction begins, the <code>root_ref</code> is not updated from the database file until a commit is issued and the <code>root_ref</code> is written to the database.</p>
+<p>What we need to happen is to restrict access to the database until the first process commits it's changes and releases the database for the other process's use.</p>
+<p>We will use a lock to achieve this. A lock is acquired when a database change need to be done and only released when the changes are committed back to the database.</p>
+<p>We also need not to restrict reading from the database when another process is changing the database.</p>
+<p>As it turns out this is simple to implement. All we need is a lock on the database file to restrict writing to it when another process is writing too, but when reading we don't care about the lock and pass it to the database. The other thing we need to take care of is the root address. Since the root address is stored in one place, thus it's mutable and needs more care. Unlike the rest of the database, when reading or writing the root address we need to lock the root address portion, because if a read happens while the root address is being written we can end up with a messed up address.</p>
+<p>So let's dive into code.</p>
+<p>To implement the locks we will use a library called portalocker. It's very simple to use. To lock a file all we need to do is call <code>portalocker.lock(file, portalocker.LOCK_EX)</code> and to unlock it we call <code>portalocker.unlock(file)</code>. The LOCK_EX means that the lock is exclusive, that is it can't be acquired by another process.</p>
+<p>After installing portalocker, we will implement an interface for it in the storage class to lock the storage, unlock it, lock the root section and unlock it.</p>
+<div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Storage</span><span class="p">:</span>
+   <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">file</span><span class="p">):</span>
+      <span class="k">try</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">_root_lock_file</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="o">+</span><span class="nb">file</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s1">&#39;.lock&#39;</span><span class="p">,</span> <span class="s1">&#39;x+b&#39;</span><span class="p">)</span>
+      <span class="k">except</span><span class="p">:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">_root_lock_file</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="o">+</span><span class="nb">file</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s1">&#39;.lock&#39;</span><span class="p">,</span> <span class="s1">&#39;r+b&#39;</span><span class="p">)</span>
+      <span class="o">...</span>
+
+   <span class="k">def</span> <span class="nf">read_root_address</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">lock_root</span><span class="p">()</span>
+      <span class="o">...</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">unlock_root</span><span class="p">()</span>
+
+   <span class="k">def</span> <span class="nf">write_root_address</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">lock_root</span><span class="p">()</span>
+      <span class="o">...</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">unlock_root</span><span class="p">()</span>
+
+   <span class="k">def</span> <span class="nf">lock</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_locked</span> <span class="o">=</span> <span class="bp">True</span>
+      <span class="n">portalocker</span><span class="o">.</span><span class="n">lock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_file</span><span class="p">,</span> <span class="n">portalocker</span><span class="o">.</span><span class="n">LOCK_EX</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">unlock</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_locked</span> <span class="o">=</span> <span class="bp">False</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_file</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+      <span class="n">portalocker</span><span class="o">.</span><span class="n">unlock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_file</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">lock_root</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="n">portalocker</span><span class="o">.</span><span class="n">lock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_root_lock_file</span><span class="p">,</span> <span class="n">portalocker</span><span class="o">.</span><span class="n">LOCK_EX</span><span class="p">)</span>
+
+   <span class="k">def</span> <span class="nf">unlock_root</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="n">portalocker</span><span class="o">.</span><span class="n">unlock</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_root_lock_file</span><span class="p">)</span>
+</pre></div>
+
+
+<p>with the interface in place, we can start implementing the lock mechanism in the LogicalBase class.</p>
+<p>We just need to lock the storage when setting a value or deleting it, and lock the root section when reading or writing to it. The root section can be unlocked immediately once the root address is read or written to, but the database lock can only be unlocked when committing or rolling back a transaction.</p>
+<div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">LogicalBase</span><span class="p">:</span>
+   <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+      <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_storage</span><span class="o">.</span><span class="n">is_locked</span><span class="p">():</span> <span class="c1"># inplace of if self._root_ref is None:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">_retrieve_root</span><span class="p">()</span> <span class="c1"># we don&#39;t lock the database</span>
+         <span class="o">...</span>
+   <span class="k">def</span> <span class="nf">set</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+      <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_storage</span><span class="o">.</span><span class="n">is_locked</span><span class="p">():</span> <span class="c1"># inplace of if self._root_ref is None:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">_storage</span><span class="o">.</span><span class="n">lock</span><span class="p">()</span>
+         <span class="o">...</span>
+   <span class="k">def</span> <span class="nf">delete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+      <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_storage</span><span class="o">.</span><span class="n">is_locked</span><span class="p">():</span> <span class="c1"># inplace of if self._root_ref is None:</span>
+         <span class="bp">self</span><span class="o">.</span><span class="n">_storage</span><span class="o">.</span><span class="n">lock</span><span class="p">()</span>
+         <span class="o">...</span>
+   <span class="k">def</span> <span class="nf">commit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="o">...</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_storage</span><span class="o">.</span><span class="n">unlock</span><span class="p">()</span>
+   <span class="k">def</span> <span class="nf">rollback</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+      <span class="o">...</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">_storage</span><span class="o">.</span><span class="n">unlock</span><span class="p">()</span>
+</pre></div>
+
+
+<p>and with these simple changes we have implemented our isolation property.</p>
+<h2>Atomicity</h2>
+<p>Atomicity may be the most important property of the ACID properties. It's the guarantee that a transaction is either successfully committed or not at all. Put in other words if a failure happens during committing the transaction is discarded if it can't be fully completed.</p>
+<p>And here's the great thing, our implementation already meets these requirements. First, A transaction doesn't affect the database until it's committed. When committing a transaction, we do affect the database file, so if a failure happens, the database file will have additional data, but this data doesn't really affect the database when loaded, because the reachable keys remain the same until we change the root address. Thanks to the immutable nature of our tree and database.</p>
+<h2>Consistency</h2>
+<p>I don't intend to implement this in our little database, but it deserves to be mentioned.</p>
+<p>The consistency property can be implemented by the user of the database or by extending our logical base to run other checks before committing to the database. What checks it will run depends on what we want to achieve, but we need to store these checks somewhere where we could always retrieve it, Wondering where it can be stored? We can use what we already built and use special keys to store the kind of checks we want to perform. We may store it in the same database file or in a different one.</p>
+<h2>Improvements</h2>
+<p>There's a plenty of room for improvements in this simple key-value database. I will mention a few examples for the sake of completeness.</p>
+<p>First and most importantly this database doesn't scale well. Try adding the keys <code>[i for i in range(10**5)]</code> in order, and notice how slow it becomes specially for setting a value or deleting it. This happens because of an in-balanced tree; all the keys are added to the right subtree of each node and all the left nodes are empty making the tree's access time O(n). There's many ways to solve this, we can rebalance the tree, or a better approach would be to use some kind of a self-balancing tree.</p>
+<p>Second comes the isolation property, and this is an easy fix. The isolation property implementation in a database can be characterized by it's level. There's four levels of isolation a database can implement. The <a href="https://en.wikipedia.org/wiki/Isolation_(database_systems)">wikipedia page on isolation</a> does a great job explaining the different levels and their effects on the database transactions.</p>
+<p>Our little database system here implements the read committed level of isolation, but can easily be upgraded to use serializable level of isolation without locking the database. By not updating the <code>root_ref</code> on get operations and only update it when beginning a transaction. We will need to add two methods to begin and end a read transaction. Interleaving get and set/delete operations during such a transaction will get a little tricky but doable.</p>
+<p>Another appoach is to do transactions in a completely different way. The idea of Redis transactions is a powerful yet simple way to do it. All operations are delayed until commit (or EXEC in Redis) is issued. Only then, the operations are performed. This is useful for performance and when the database is a distributed system.</p>
+<p>Lastly the value attached with a key as it's now is a simple picklable value, but we can easily implement more complex values. Here's a few examples from Redis database (an in-memory key-value store):</p>
+<ul>
+<li>List: Easiest to implement as a linked list, but that in itself is a very powerful structure. Support adding and poping from both ends and you've got a stack and queue at your disposal.</li>
+<li>Map: Could be implemented as a hash table but it's easier to implement as a tree, which we already support.</li>
+<li>Ordered and Unordered Set: Again you may use what we've already built.</li>
+</ul>
+<h3>Scalability</h3>
+<p>Scalability is a system's ability to handle a growing amount of work. In the database system case, the growing amount of work represents a growth in data stored.</p>
+<p>There's two types of scaling in database systems, vertical scaling and horizontal scaling.</p>
+<p>A vertical scaling is when a database is scaled by adding more resources to the existing hardware, like more RAM, storage, or processing power. Horizontal scaling is done by adding more hardware units, by adding more processing units and distributing the workload amongst them.</p>
+<p>Horizontal scaling is way cheaper than vertical scaling which makes it more desirable. A unique characteristic of NoSQL databases is there ability to scale exteremely well horizontally.</p>
+<p>To scale our little database horizontally, we could follow many approaches. We could have a coordinator server that determines where in a cluster of servers a key resides. To not have to save all the keys, this server will maintain a key-range to server mapping. Each server will maintain it's own database file, unaware of other servers.</p>
+<p>From here on things will get more and more tricky. We will need to have replicas of data, while ensuring they are up-to-date with each other and maintaining the ACID properties. NoSQL databases' answer to this is to drop or implement some kind of more relaxed ACID properties. These relaxed properties has became their own and were named the BASE properties.</p>
+<h2>The End</h2>
+<p>And that's it. Thanks for reading. I hope you have learned something out of this and enjoyed reading it as much as I enjoyed writing it. See you soon!</p>
+    </div>
+  </article>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="container">
+<div class="row">
+  <p class="col-sm-6 text-sm-right text-muted">
+    Generated by <a href="https://github.com/getpelican/pelican" target="_blank">Pelican</a>
+    / <a href="https://github.com/nairobilug/pelican-alchemy" target="_blank">&#x2728;</a>
+  </p>
+</div>    </div>
+  </footer>
+</body>
+
+</html>
