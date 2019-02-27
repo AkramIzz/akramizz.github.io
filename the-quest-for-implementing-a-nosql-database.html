@@ -54,7 +54,7 @@
     <div class="content">
       <p>In the past few weeks, I have been experimenting with my own NoSQL database, a key-value data store to be precise. And I have realized how simple it's to create, at least a non-distributed one. Ok, ok, you may argue that this is the distinguishing characteristic of a NoSQL database, but I have learned so much from this simple and fun project, and to honest it's so amazing that I couldn't resist writing a post about it, so here we go.</p>
 <p><strong>Disclaimer</strong>: I'm in no way a databases expert. The thoughts in this post are my own understanding of NoSQL databases, how they may operate and their concepts after searching and reading about the topic from various sources.
-If you notice any bugs, misconceptions or mistakes, please leave a comment or contact me.</p>
+If you notice any bugs, misconceptions or mistakes, please contact me.</p>
 <p>What we are going to build is a key-value database that (mostly) adheres to the A<strike>C</strike>ID properties. If you don't know what are these properties, stick around we will shortly know. The database is persistent in a file. It will support putting a value, updating a value, getting the value, or deleting it. Enough talk let's get going.</p>
 <h2>An Immutable Binary-Search Tree</h2>
 <p>When solving a problem, specially a big problem, I like to start with a simpler version of the problem, so first, we will begin with an in-memory key-value store. Yes, it's a simple dictionary but we won't use a hash table because a hash table isn't easy to store and be partly load into memory from a file. What we will use is a binary-search tree. A binary-search tree can be divided into standalone nodes, which is nice to have. We will soon see why. I'm going to use an immutable implementation of the binary-search tree data structure, it will help us later when we need to store the database, and you will see how easy it's to implement</p>
@@ -208,7 +208,7 @@ If you notice any bugs, misconceptions or mistakes, please leave a comment or co
 
 
 <p>Data is always written at the end of the file, but honestly it doesn't matter, all that matters is we write the data in a place that is not used, and the end of the file seemed like a good solution.</p>
-<p>Right before storing the data we write it's size so that when reading we know how many bytes we should read, this is known as a fat-pointer ??!.</p>
+<p>Right before storing the data we write it's size so that when reading we know how many bytes we should read.</p>
 <div class="highlight"><pre><span></span>   <span class="k">def</span> <span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
       <span class="bp">self</span><span class="o">.</span><span class="n">_file</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">SEEK_END</span><span class="p">)</span>
       <span class="n">address</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_file</span><span class="o">.</span><span class="n">tell</span><span class="p">()</span>
