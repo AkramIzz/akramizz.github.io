@@ -1,0 +1,9 @@
+<div class="d-flex flex-column flex-justify-between height-full text-left {% if site.style == 'dark' %}box-shadow{% else %}border border-gray-light{% endif %} bg-white rounded-1 p-3" {% if site.style == 'dark' %}style="background-color: #2f363d !important"{% endif %}>
+  {% if app.link %}<a href="{{ app.link }}">{% endif %}
+    <div class="d-flex flex-justify-between flex-items-start mb-1">
+      <h1 class="f4 lh-condensed mb-1">
+        <img src={{ app.img }} width=100%/>
+      </h1>
+    </div>
+    {% if app.link %}</a>{% endif %}
+</div>

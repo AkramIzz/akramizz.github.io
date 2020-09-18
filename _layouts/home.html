@@ -12,17 +12,23 @@
       {% include projects.html %}
     </div>
 
-    {% if site.topics %}
+    {% unless apps_total == 0 %}
       <div class="my-6">
-        {% include interests.html %}
+        {% include apps.html %}
       </div>
-    {% endif %}
+    {% endunless %}
 
     {% unless posts_total == 0 %}
       <div class="my-6">
         {% include thoughts.html %}
       </div>
     {% endunless %}
+
+    {% if site.topics %}
+      <div class="my-6">
+        {% include interests.html %}
+      </div>
+    {% endif %}
   </div>
 {% else %}
   <div class="d-md-flex min-height-full {% unless site.style == 'dark' %}border-md-bottom{% endunless %}">
@@ -47,6 +53,11 @@
         {% unless posts_total == 0 %}
           {% include thoughts.html %}
         {% endunless %}
+
+        {% unless apps_total == 0 %}
+          {% include apps.html %}
+        {% endunless %}
+          
       </div>
     </div>
   </div>
