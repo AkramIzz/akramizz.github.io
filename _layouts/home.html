@@ -46,18 +46,17 @@
 
         {% include projects.html %}
 
-        {% if site.topics %}
-          {% include interests.html %}
-        {% endif %}
+        {% unless apps_total == 0 %}
+          {% include apps.html %}
+        {% endunless %}
 
         {% unless posts_total == 0 %}
           {% include thoughts.html %}
         {% endunless %}
 
-        {% unless apps_total == 0 %}
-          {% include apps.html %}
-        {% endunless %}
-          
+        {% if site.topics %}
+          {% include interests.html %}
+        {% endif %}          
       </div>
     </div>
   </div>
